@@ -1,0 +1,75 @@
+FROM phusion/baseimage
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    USER=root
+
+RUN apt-get update && apt-get -y upgrade && \
+    apt-get -y install \
+    apache2 sendmail uuid uuid-runtime curl policycoreutils \
+    unzip patch git nano gcc make mcrypt \
+    php php-fpm php-common php-mysql php-ldap php-cgi php-pear \
+    php7.0-mbstring php7.0-zip php-xml-parser php-curl php-gd \
+    php-cli php-fpm php-apcu php-dev php-mcrypt mcrypt \
+    supervisor apt-utils openssh-server
+
+RUN a2enmod proxy_fcgi setenvif
+RUN a2enconf php7.0-fpm
+RUN a2enmod ssl rewrite headers
+RUN pecl channel-update pecl.php.net
+
+#RUN pecl install uploadprogress
+
+RUN touch /etc/php/7.0/mods-available/uploadprogress.ini
+RUN echo extension=uploadprogress.so > /etc/php/7.0/mods-available/uploadprogress.ini
+
+RUN mkdir /var/log/php-fpm/
+RUN echo slowlog = /var/log/php-fpm/www-slow.log >> /etc/php/7.0/fpm/pool.d/www.conf
+RUN echo request_slowlog_timeout = 2s >> /etc/php/7.0/fpm/pool.d/www.conf
+RUN echo php_admin_value[error_log] = /var/log/php-fpm/www-error.log >> /etc/php/7.0/fpm/pool.d/www.conf
+
+
+#RUN service php7.0-fpm restart
+#RUN setsebool -P httpd_can_sendmail on
+
+RUN groupadd admin
+RUN groupadd elmsln
+
+
+# Manually set up the apache environment variables
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+ENV APACHE_LOCK_DIR /var/lock/apache2
+ENV APACHE_PID_FILE /var/run/apache2.pid
+
+ADD elmsln /var/www/elmsln
+ADD apache-config.conf /etc/apache2/sites-enabled/000-default.conf
+
+
+
+COPY /shell/elmsln-preinstall.sh /usr/local/bin/elmsln-preinstall.sh
+RUN chmod +x /usr/local/bin/elmsln-preinstall.sh
+
+COPY /shell/elmsln-admin-user.sh /usr/local/bin/elmsln-admin-user.sh
+RUN chmod +x /usr/local/bin/elmsln-admin-user.sh
+
+COPY /shell/elmsln-install.sh /usr/local/bin/elmsln-install.sh
+RUN chmod +x /usr/local/bin/elmsln-install.sh
+
+
+
+COPY /shell/elmsln-create-accounts.sh /usr/local/bin/elmsln-create-accounts.sh
+RUN chmod +x /usr/local/bin/elmsln-create-accounts.sh
+
+COPY /shell/apply-ssh.sh /usr/local/bin/apply-ssh.sh
+RUN chmod +x /usr/local/bin/apply-ssh.sh
+
+COPY /shell/harden-security.sh /usr/local/bin/harden-security.sh
+RUN chmod +x /usr/local/bin/harden-security.sh
+
+
+COPY /shell/handsfree-install.sh /usr/local/bin/handsfree-install.sh
+RUN chmod +x /usr/local/bin/handsfree-install.sh
+CMD ["/usr/local/bin/handsfree-install.sh 2 DaveFusco DF drdavefusco.com drdavefusco.com drdavefusco.com data- http davidjfusco@gmail.com davidjfusco@gmail.com elmsln yes"]
+
+CMD /usr/sbin/apache2ctl -D FOREGROUND
